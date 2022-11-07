@@ -1,0 +1,239 @@
+<html>
+    <head>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/3.0.4/socket.io.js 
+        "></script>
+        <script src="https://kit.fontawesome.com/fbfe3f8f60.js" crossorigin="anonymous"></script>
+        <style>
+            @font-face {
+                font-family: 'GangwonEdu_OTFBoldA';
+                src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2201-2@1.0/GangwonEdu_OTFBoldA.woff') format('woff');
+                font-weight: normal;
+                font-style: normal;
+            }
+            :root {
+                --text-color: #f0f4f5;
+                --background-color: #fff;
+                --accent-color: #4f7cff;
+                --border-color: #dfdfdf;
+            }
+            body { margin: 0; padding: 0; font-family: 'GangwonEdu_OTFBoldA'; box-sizing: border-box; display: flex; justify-content: center; align-items: center;}
+            .chat-page {width: 30%; height: 70%; border: 1px solid var(--border-color); padding: 10px; display: flex; flex-direction: column; justify-content: center; position: absolute;}
+            .chat-top {height: 8%; display: flex; justify-content: center; align-items: center; color: #3a3a3a; font-size: 1.5rem;}
+            .chat-list { background-color: var(--background-color); height: 80%; padding: 10px; overflow-y: auto; overflow-x: hidden;}
+            .notice-text { text-align: center;  background-color: rgb(79, 124, 255, 0.4); color: #3a3a3a; border-radius: 20px; padding: 5px 15px; font-size: 0.8rem; }
+            .notice {display: flex; justify-content: center; align-items: center; padding: 4px 0;}
+            /* <div class="chat-list"><div class="my-chat"><div>텍스트</div></div></div>  */
+            .chat-list div div { display: inline-block;}
+            .my-chat { display: flex; justify-content: right; flex-direction: column; align-items: flex-end; padding: 4px 0; }
+            .my-chat span { display: inline-block; font-size: 0.8rem; padding: 5px 1px; }
+            /* .my-chat span {display: flex; flex-direction: column;} */
+            .my-chat div { background-color: var(--accent-color); color:#fff; border-radius: 3px; padding: 6px 10px; white-space: pre-line; }
+            .other-chat { padding: 4px 3px; display: flex; justify-content: left; align-items: flex-start; flex-direction: column;}
+            .other-chat span {display: inline-block; font-size: 0.8rem; padding: 5px 1px;}
+            .other-chat div {background-color:#ededed; border-radius: 3px; padding: 6px 10px; white-space: pre-line; font-size: 0.9rem;}
+            .chat-op {  background-color: var(--background-color); display: flex; justify-content: space-between; align-items: center; height: 10%; padding: 0 20px; border: 1px solid var(--border-color); border-radius: 30px;}
+            textarea { width: 75%; height: 70%; margin: 5px 0; padding: 5px 0; background-color: var(--background-color); resize: none; border: none; font-size: 1rem;}
+            select { width:15%;  border:none; background-color: var(--background-color); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+            select option { padding: 15px 0; }
+            select:focus, option:focus, textarea:focus{outline: none;}
+            .DM {color: red;}
+            i:hover {cursor: pointer;}
+
+            @media (max-width: 1200px) {
+                .chat-page{
+                    width: 40%;
+                }
+
+            }
+            @media (max-width: 900px) {
+                .chat-page{
+                    width: 50%;
+                }
+
+            }
+        </style>
+    </head>
+    <body>
+        <div class="chat-page">
+            <div class="chat-top">Messages</div>
+            <div id="chat-list" class="chat-list"></div>
+        
+        <!-- 닉네임 리스트 보여주기 위한 도구 -->
+            <div class="chat-op">
+                <select id="nick-list" >
+                    <option disabled selected></option>
+                    <option value="전체">전체</option>
+                </select>
+
+                <!-- <input type="text" id="message"> -->
+                <textarea id="message" placeholder="메세지를 입력하세요." onfocus="this.placeholder = ''" onblur="this.placeholder = '메세지를 입력하세요.'" onkeyup="enter();"></textarea>
+
+                <a id="btn" onclick="send();"><i class="fa-regular fa-paper-plane fa-xl" style="color: var(--accent-color)"></i></a>
+            
+            </div>
+        </div>
+        <script>
+            const date = new Date();
+
+            const hours = ('0' + date.getHours()).slice(-2);
+            const minutes = ('0' + date.getMinutes()).slice(-2);
+            // const seconds = ('0' + date.getSeconds()).slice(-2);
+            const timeStr = hours + ':' + minutes;
+            console.log(timeStr);
+
+            var socket = io.connect();
+            
+            // prompt를 이용하여 닉네임 입력 받기
+            while(true){
+                var nickname = prompt("닉네임을 입력해 주세요.(2-10자 제한, 특수문자 제외)");
+                console.log(nickname.length);
+
+                //공백만 입력된 경우
+                var blank_pattern = /^\s+|\s+$/g;
+                if(nickname.replace(blank_pattern, '' ) == "" ){
+                    alert('공백만 입력되었습니다. 다시 입력해 주세요.');
+                    continue;
+                }
+                
+                //문자열에 공백이 있는 경우
+                var blank_pattern = /[\s]/g;
+                if( blank_pattern.test(nickname) == true){
+                    alert('공백이 입력되었습니다. 다시 입력해 주세요.');
+                    continue;
+                }
+                //특수문자가 있는 경우
+                var special_pattern = /[`~!@#$%^&*()+|\\\'\";:\/?]/gi;
+                if(special_pattern.test(nickname) == true){
+                    alert('특수문자가 입력되었습니다. 다시 입력해 주세요.');
+                    continue;
+                }
+
+                // 글자수 초과
+                if ( nickname.length > 10 || nickname.length < 2 ) {
+                    alert('닉네임은 2자 이상 10자 이하로 작성해 주세요.');
+                    continue;
+                }
+
+                break;
+            }
+            
+
+            // info2 이벤트명으로 닉네임 보내기
+            socket.emit("info2", {nickname : nickname});
+            
+            // var id = "";
+            // socket.on("info", function(data){console.log(data); id = data; });
+
+            // data = data.nickname + "님이 입장하셨습니다."
+            socket.on("notice", function(data){
+                let chat_list = document.getElementById("chat-list");
+                let div = document.createElement("div"); // <div></div>
+                let span = document.createElement("span"); // <span></span>
+                span.textContent = data;
+                span.classList.add("notice-text")
+                div.appendChild(span);
+                div.classList.add("notice");
+
+                chat_list.appendChild(div);
+            });
+
+            function enter(){
+                let msg = document.getElementById("message").value;
+                if (msg=="\n"){
+                    alert("메세지를 입력하세요");
+                    document.getElementById("message").value = "";
+                    return false;
+                }
+                else if (window.event.keyCode === 13 && !window.event.shiftKey){
+                    send();
+                }
+            }
+
+            function send(){
+                let msg = document.getElementById("message").value;
+                let nick = document.getElementById("nick-list").value;
+
+                if (!msg){
+                    alert("메세지를 입력하세요");
+                    return false;
+                }
+                // send 이벤트명으로 메세지와 닉네임 보애기
+                socket.emit("send", {msg: msg, to: nick});
+                document.getElementById("message").value = "";
+            }
+
+            // data = {msg: msg, to: nick}
+            socket.on("newMessage", function(data){
+                console.log( data );
+
+                let chat_list = document.getElementById("chat-list");
+                let div = document.createElement("div"); // <div></div>
+                let div_chat = document.createElement("div"); // <div></div>
+                var span = document.createElement("span");
+                var DM = document.createElement("span");
+                var time = document.createElement("span") // timeStr
+                time.innerHTML = timeStr;
+
+                div_chat.textContent = data.msg; // <div>{msg}</div>
+                
+                DM.textContent = "(DM)";
+                DM.classList.add("DM");
+                
+                // if ( data.is_dm ) { div_chat.textContent = "(DM)" + div_chat.textContent; }
+                if ( data.nickname == nickname ) { 
+                    if ( data.is_dm ) {
+                        span.textContent = "내가 " + data.to + "님에게";
+                        span.appendChild(DM);
+                    }
+                    else {
+                        span.textContent = "내가 모두에게";
+                    }
+                    div.appendChild(span);
+                    div.classList.add("my-chat");  
+                } // <div class="my-chat"></div>
+                else {
+                    if ( data.is_dm ) {
+                        span.textContent = data.nickname + "님이 나에게";
+                        span.appendChild(DM);
+                    }
+                    else {
+                        span.textContent = data.nickname + "님이 모두에게";
+                    }
+                    div.appendChild(span);
+                    div.classList.add("other-chat");
+                }
+
+                div.appendChild(div_chat);
+                div.appendChild(time);
+                // <div class="my-chat">
+                    // <div>{msg}</div>
+                // </div>
+
+                chat_list.appendChild(div);
+            });
+
+            socket.on("list", function(list){
+                // list = { id~~: nickname, id~~~~: nickname };
+                let nick_list = document.getElementById("nick-list");
+                
+                while(nick_list.firstChild){ // firstCHild -> #text
+                    nick_list.removeChild(nick_list.lastChild);
+                }
+
+                let option = document.createElement("option");
+                option.text = "전체";
+                option.value = "전체";
+                nick_list.appendChild( option );
+
+                for ( let[key, value] of Object.entries(list) ){
+                    // key = socket.id , value = nickname
+                    let option = document.createElement("option");
+                    option.text = value;
+                    option.value = value;
+                    nick_list.appendChild( option );
+                }
+            });
+        </script>
+
+    </body>
+</html>
